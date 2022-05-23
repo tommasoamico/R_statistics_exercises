@@ -152,7 +152,7 @@ distribuion with $\alpha = \sum_i y_i + 1$ and $\beta = n$
 
 
 ```{r}
-deaths <- c(0, 1, 2, 3, 4, 5)
+deaths <- 0:5
 obs_1 <- c(109, 65, 22, 3, 1, 0)
 obs_2 <- c(144, 91, 32, 11, 2, 0)
 
@@ -560,17 +560,215 @@ model <- 'ex_1.bug'
 jm <- jags.model(model, data)
 update(jm, 1000)
 chain <- coda.samples(jm, c("p"), n.iter=10000)
-print(summary(chain))
+s <- (summary(chain))
+print(s)
+```
+
+
+
+```{r}
+plot(chain, col="navy")
+```
+
+```{r}
+chain_df <- as.data.frame( as.mcmc(chain) )
+head(chain_df)
+```
+```{r}
+trials <- 75
+mean_beta <- 0.15
+std_beta <- 0.14
+alpha <- ((1-mean_beta)/(std_beta^2) -1/mean_beta)*mean_beta^2
+beta <- alpha*(1/mean_beta - 1)
+posterior <- function(x) 
+{dbeta(x, shape1=alpha + new_fails, shape2 = trials - new_fails + beta)}
+
+x_axis <- seq(0,0.3,0.001)
+
+
+plot <- ggplot() +
+        geom_histogram(aes(chain_df$p, y=..density.., fill='Chain'), color='black', bins=100) +
+        geom_line(aes(x =x_axis, y = posterior(x_axis), color='Analytical posterior'), lwd=1.5)+
+        scale_color_manual(values = c('Analytical posterior'='blue')) +
+        labs(color='Legend', fill='', x='Probability values', y = 'Posterior pdf',
+             title = 'MCMC inference') +
+        
+        theme_bw()
+
+plot
+```
+
+```{r}
+stat_values <- s$statistics
+cat(paste('The mean given by the chain is', round(stat_values[['Mean']], 4)))
+cat(paste('\nThe standard deviation given by the chain is', round(stat_values[['SD']], 4)))
+cat(paste('\nThe median given by the chain is', round(s$quantiles[['50%']], 4)))
+cat(paste('\nThe confidence interval given by the chain is', round(s$quantiles[['2.5%']], 4),
+          '-', round(s$quantiles[['97.5%']], 4)))
+```
+
+# Exercise 5
+
+```{r}
+n <- obs_1 + obs_2
+obs <- rep(deaths, n)
+
+
+```
+
+
+```{r}
+
+data <- NULL
+data$X <- obs
+
+```
+
+```{r}
+model <- 'ex_2.bug'
+jm <- jags.model(model, data)
+update(jm, 1000)
+chain <- coda.samples(jm, c("lambda"), n.iter=10000)
+s <- (summary(chain))
+print(s)
+
 ```
 ```{r}
 plot(chain, col="navy")
 ```
 
 ```{r}
-chain.df <- as.data.frame( as.mcmc(chain) )
-head(chain.df)
+chain_df <- as.data.frame( as.mcmc(chain) )
+head(chain_df)
+```
+
+```{r}
+x_axis <- seq(0.3, 1, 0.001)
+beta_post <- sum(obs_1 + obs_2)
+alpha_post <- sum((obs_1 + obs_2)*deaths) + 1
+posterior <- dgamma(x_axis, shape=alpha_post, scale = 1/beta_post)
+
+plot <- ggplot() +
+        geom_histogram(aes(chain_df$lambda, y=..density.., fill='Chain'), color='black', bins=100) +
+         geom_line(aes(x =x_axis, y = posterior, color='Analytical posterior'), lwd=1) +
+           
+        scale_color_manual(values = c('Analytical posterior'='blue')) +
+        labs(color='Legend', fill='', x=TeX('$\\lambda$ values'), y = 'Posterior pdf',
+             title = 'MCMC inference poisson process') +
+        
+        theme_bw()
+
+
+
+plot
 ```
 ```{r}
-plot <- ggplot()
+stat_values <- s$statistics
+cat(paste('The mean given by the chain is', round(stat_values[['Mean']], 4)))
+cat(paste('\nThe standard deviation given by the chain is', round(stat_values[['SD']], 4)))
+cat(paste('\nThe median given by the chain is', round(s$quantiles[['50%']], 4)))
+cat(paste('\nThe confidence interval given by the chain is', round(s$quantiles[['2.5%']], 4),
+          '-', round(s$quantiles[['97.5%']], 4)))
+```
+### Jeffreys prior
+
+```{r}
+model <- 'ex_2_b.bug'
+jm <- jags.model(model, data)
+update(jm, 1000)
+chain <- coda.samples(jm, c("lambda"), n.iter=10000)
+s <- (summary(chain))
+print(s)
+
+```
+```{r}
+plot(chain, col="navy")
+```
+
+```{r}
+beta_post <- sum(obs_1 + obs_2)
+alpha_post <- sum((obs_1 + obs_2)*deaths) + 1/2
+posterior <- dgamma(x_axis, shape=alpha_post, scale = 1/beta_post)
+
+plot <- ggplot() +
+        geom_histogram(aes(chain_df$lambda, y=..density.., fill='Chain'), color='black', bins=100) +
+         geom_line(aes(x =x_axis, y = posterior, color='Analytical posterior'), lwd=1) +
+           
+        scale_color_manual(values = c('Analytical posterior'='blue')) +
+        labs(color='Legend', fill='', x=TeX('$\\lambda$ values'), y = 'Posterior pdf',
+             title = 'MCMC inference Jeffreys prior') +
+        
+        theme_bw()
+
+
+
+plot
+```
+```{r}
+stat_values <- s$statistics
+cat(paste('The mean given by the chain is', round(stat_values[['Mean']], 4)))
+cat(paste('\nThe standard deviation given by the chain is', round(stat_values[['SD']], 4)))
+cat(paste('\nThe median given by the chain is', round(s$quantiles[['50%']], 4)))
+cat(paste('\nThe confidence interval given by the chain is', round(s$quantiles[['2.5%']], 4),
+          '-', round(s$quantiles[['97.5%']], 4)))
+```
+
+
+```{r}
+sucesses <- 11
+n <- 116
+data_obs <- rep(c(1, 0), c(sucesses, n-sucesses))
+
+data <- NULL
+data$X <- data_obs
+data$n <- length(data_obs)
+```
+
+
+```{r}
+model <- 'ex_1.bug'
+jm <- jags.model(model, data)
+update(jm, 1000)
+chain <- coda.samples(jm, c("p"), n.iter=10000)
+s <- (summary(chain))
+print(s)
+```
+
+
+
+```{r}
+plot(chain, col="navy")
+```
+
+```{r}
+chain_df <- as.data.frame( as.mcmc(chain) )
+head(chain_df)
+```
+
+```{r}
+alpha_post =  1 + sucesses
+beta_post = n - sucesses + 10
+posterior <- function(x){dbeta(x, shape1 = alpha_post, shape2 = beta_post)}
+x_axis <- seq(0, 0.3, 0.001)
+
+plot <- ggplot() +
+        geom_histogram(aes(chain_df$p, y=..density.., fill='Chain'), color='black', bins=100) +
+        geom_line(aes(x =x_axis, y = posterior(x_axis), color='Analytical posterior'), lwd=1.5)+
+        scale_color_manual(values = c('Analytical posterior'='blue')) +
+        labs(color='Legend', fill='', x='Probability values', y = 'Posterior pdf',
+             title = 'MCMC inference') +
+        
+        theme_bw()
+
+plot
+```
+
+```{r}
+stat_values <- s$statistics
+cat(paste('The mean given by the chain is', round(stat_values[['Mean']], 4)))
+cat(paste('\nThe standard deviation given by the chain is', round(stat_values[['SD']], 4)))
+cat(paste('\nThe median given by the chain is', round(s$quantiles[['50%']], 4)))
+cat(paste('\nThe confidence interval given by the chain is', round(s$quantiles[['2.5%']], 4),
+          '-', round(s$quantiles[['97.5%']], 4)))
 ```
 
