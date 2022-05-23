@@ -1,0 +1,576 @@
+```{r}
+library('ggplot2')
+library('latex2exp')
+library('coda')
+library('rjags')
+
+```
+
+```{r}
+
+```
+
+# Exercise 1
+
+## Point 1
+We have that y follows a binomial probability distribution: the method either fails to detect the desease or it fails
+
+## Point 2
+```{r}
+trials <- 75
+new_fails <- 6
+```
+
+```{r}
+cat('We use as an estimator y/n so, frequqntist estimator of the failure probability = ', new_fails/trials)
+```
+
+
+
+
+
+
+
+
+```{r}
+trials <- 75
+mean_beta <- 0.15
+std_beta <- 0.14
+alpha <- ((1-mean_beta)/(std_beta^2) -1/mean_beta)*mean_beta^2
+beta <- alpha*(1/mean_beta - 1)
+#Setting the alpha parameter to have the mode at 15/75
+
+prior <- function(x) {dbeta(x, shape1 = alpha, shape2 = beta)}
+
+```
+
+
+
+
+
+
+```{r}
+x_axis <- seq(0,1, length.out=1000)
+plot <- ggplot() +
+        geom_line(aes(x=x_axis, y=prior(x_axis))) +
+        theme_bw() 
+plot
+```
+
+
+
+
+```{r}
+posterior <- function(x) 
+{dbeta(x, shape1=alpha + new_fails, shape2 = trials - new_fails + beta)}
+```
+
+
+```{r}
+
+
+plot <- ggplot() +
+        geom_line(aes(x =x_axis, y = posterior(x_axis))) +
+        labs(title = 'Posterior of the binomial probability parameter',
+             x = 'Prob', y = 'Posterior pdf') +
+        theme_bw()
+
+plot
+```
+
+
+## Point 4
+
+### We choose as the null hypothesis the fact that the probability of failing to detect the disease is greater or equal than 15%
+
+```{r}
+# Here we visualize the region corresponding to the null hypothesis
+plot <- ggplot() +
+        geom_line(aes(x_axis, y = posterior(x_axis), color='Posterior')) +
+        geom_vline(aes(xintercept = 0.15, color='Prob=0.15'), linetype='dashed',
+                   lwd=1) +
+        geom_ribbon(aes(x=seq(0.15, 1, 0.01), ymin = 0, 
+                        ymax = posterior(seq(0.15, 1, 0.01)
+                        )), color='firebrick', fill='green') +
+        theme_bw()
+plot
+```
+
+
+```{r}
+cat(paste('The integral of the region of interest is', 
+          round(integrate(posterior, lower=0.15, upper=1)$value, digits = 3)))
+```
+Having chose the level of significance at $5$ % and being the integral lower then 0.05 we reject the null hyotothesis.
+
+## Point 5
+
+### With the classical method
+
+```{r}
+y_vector <- 0:25
+p_null <- 0.15
+
+plot <- ggplot() +
+        geom_col(aes(x=y_vector, y=dbinom(y_vector, prob = p_null, size = trials)), 
+                 fill='blue', alpha=0.5, color='black') +
+        geom_col(aes(x=6, y=dbinom(6, prob = p_null, size = trials)), 
+                 fill='firebrick', alpha=0.5, color='black') +
+        labs(title = 'Frequentist hypothesis testing', x = 'y values', y = 'Posterior values')+
+        geom_hline(aes(yintercept=0.05), linetype='dashed', color='magenta') +      
+        annotate('text', x=1, y=0.055 , label=sprintf("alpha = %s", 0.05), size=3) +
+        theme_bw()  +
+        scale_x_discrete(limits = 0:25, labels= 0:25)
+  
+plot
+```
+the value lies in the rejection region so we can reject the null hypothesis also with freqerntist's approach
+
+### We choose as the method to use Fischer's method here
+```{r}
+plot <- ggplot() +
+        geom_col(aes(x=0:8, y = pbinom(0:8, size=75, prob=0.15)), fill='blue', alpha=0.3
+                 ,color = 'black') +
+        geom_col(aes(x=6, y = pbinom(6, size=75, prob=0.15)), fill='green', alpha=0.5) +
+        geom_hline(aes(yintercept=0.05), linetype='dashed', color='firebrick') +
+        labs(title = 'Fischer\'s method hypothesis testing', x = 'Values of fails', 
+             y= 'Cumulative values') +
+        theme_bw()
+plot
+
+```
+```{r}
+cat('We have that P(y|n,p) <= 6 =',  pbinom(6, size=75, prob=0.15), '\n
+    that is greater than 0.05 so we accept the null hypothesis') 
+```
+
+
+# Exercise 2
+
+We have that in the case of a uniform prior the posterior distribution is a gamma
+distribuion with $\alpha = \sum_i y_i + 1$ and $\beta = n$
+
+
+```{r}
+deaths <- c(0, 1, 2, 3, 4, 5)
+obs_1 <- c(109, 65, 22, 3, 1, 0)
+obs_2 <- c(144, 91, 32, 11, 2, 0)
+
+beta_post <- sum(obs_1 + obs_2)
+alpha_post <- sum((obs_1 + obs_2)*deaths) + 1
+x_axis <- seq(0.25, 1, 0.001)
+posterior <- dgamma(x_axis, shape=alpha_post, scale = 1/beta_post)
+cumulative <- pgamma(x_axis, shape=alpha_post, scale = 1/beta_post)
+lower_bound <- x_axis[length(cumulative[cumulative <=0.025])]
+upper_bound <- x_axis[length(cumulative[cumulative <=0.975])]
+
+axis_ribbon <- seq(lower_bound, upper_bound, 0.001)
+
+plot <- ggplot() +
+        geom_line(aes(x=x_axis, y=posterior)) +
+        labs(x = TeX('$\\lambda$ values'), y = 'Posterior pdf' , title=TeX('Posterior of the $\\lambda$')) +
+        
+        theme_bw() +
+        theme(plot.title = element_text(hjust =0.5)) +
+        geom_vline(aes(xintercept=alpha_post/beta_post), linetype='dashed', color='green')+
+        annotate('text', x=alpha_post/beta_post+0.07, y=11 , label=sprintf("Mean = %s", round(alpha_post/beta_post, 3)), size=3) +
+        geom_ribbon(aes(x = axis_ribbon, ymin=0, ymax=dgamma(axis_ribbon, shape=alpha_post, scale = 1/beta_post)), fill='blue', alpha=0.3) +
+        geom_vline(aes(xintercept = lower_bound, color='Bounds of the \ncredible interval')
+                   , linetype = 'dashed') +
+        geom_vline(aes(xintercept = upper_bound)
+                   , linetype = 'dashed', color='magenta') +
+  
+        scale_color_manual(values = c('Bounds of the \ncredible interval'='magenta')) 
+
+plot
+```
+
+
+```{r}
+cat(paste('The mean computed analitically is:', round(alpha_post/beta_post, 3)))
+cat(paste('\nThe confidence interval is: ', round(lower_bound, 3), '-', round(upper_bound, 3)))
+
+median <- x_axis[length(cumulative[cumulative <=0.5])]
+
+cat(paste('\nThe median computed numerically is: ', median))
+
+```
+
+## Point 2 
+
+We have that in the case of Jeffreys’ prior the posterior is a gamma distribution
+with $\alpha = \sum_i y_i + \frac{1}{2}$ and $\beta = n$
+
+```{r}
+deaths <- c(0, 1, 2, 3, 4, 5)
+obs_1 <- c(109, 65, 22, 3, 1, 0)
+obs_2 <- c(144, 91, 32, 11, 2, 0)
+
+beta_post <- sum(obs_1 + obs_2)
+alpha_post <- sum((obs_1 + obs_2)*deaths) + 1/2
+x_axis <- seq(0.25, 1, 0.001)
+posterior <- dgamma(x_axis, shape=alpha_post, scale = 1/beta_post)
+cumulative <- pgamma(x_axis, shape=alpha_post, scale = 1/beta_post)
+lower_bound <- x_axis[length(cumulative[cumulative <=0.025])]
+upper_bound <- x_axis[length(cumulative[cumulative <=0.975])]
+
+axis_ribbon <- seq(lower_bound, upper_bound, 0.001)
+
+plot <- ggplot() +
+        geom_line(aes(x=x_axis, y=posterior)) +
+        labs(x = TeX('$\\lambda$ values'), y = 'Posterior pdf' , title=TeX('Posterior of the $\\lambda$'), color='Legend') +
+        
+        theme_bw() +
+        theme(plot.title = element_text(hjust =0.5)) +
+        geom_vline(aes(xintercept=alpha_post/beta_post), linetype='dashed', color='green')+
+        annotate('text', x=alpha_post/beta_post+0.07, y=11 , label=sprintf("Mean = %s", round(alpha_post/beta_post, 3)), size=3) +
+        geom_ribbon(aes(x = axis_ribbon, ymin=0, ymax=dgamma(axis_ribbon, shape=alpha_post, scale = 1/beta_post)), fill='blue', alpha=0.3) +
+        geom_vline(aes(xintercept = lower_bound, color='Bounds of the \nconfidence interval')
+                   , linetype = 'dashed') +
+        geom_vline(aes(xintercept = upper_bound)
+                   , linetype = 'dashed', color='magenta') +
+  
+        scale_color_manual(values = c('Bounds of the \nconfidence interval'='magenta')) 
+
+plot
+
+```
+```{r}
+cat(paste('The mean computed analitically is:', round(alpha_post/beta_post, 3)))
+cat(paste('\nThe variance computed analitically is:', round(alpha_post/(beta_post^2), 4)))
+cat(paste('\nThe confidence interval is: ', round(lower_bound, 3), '-', round(upper_bound, 3)))
+
+median <- x_axis[length(cumulative[cumulative <=0.5])]
+
+cat(paste('\nThe median computed numerically is: ', median))
+```
+
+# Exercise 3
+
+## Point 1
+```{r}
+y <- 11
+n<- 116
+cat(paste('The frequentist estimator for p is y/n = ', round(y/n, 3)))
+```
+
+## Point 2
+
+We have that the posterior in this particulaer beta prior case is again a beta with 
+$\alpha' = \alpha + y$ and $\beta' = n - y + \beta$
+
+```{r}
+prior <- function(x){dbeta(x, shape1 = 1, shape2 = 2)}
+```
+
+
+```{r}
+alpha_post =  1 + y
+beta_post = n - y + 10
+posterior <- function(x){dbeta(x, shape1 = alpha_post, shape2 = beta_post)}
+```
+
+
+```{r}
+x_axis <- seq(0, 1, 0.001)
+cumulative <- pbeta(x_axis,  shape1 = alpha_post, shape2 = beta_post)
+lower_bound <- x_axis[length(cumulative[cumulative <=0.025])]
+upper_bound <- x_axis[length(cumulative[cumulative <=0.975])]
+mean <- alpha_post/(beta_post + alpha_post)
+mode <- (alpha_post - 1)/(beta_post + alpha_post-2)
+axis_ribbon <- seq(lower_bound, upper_bound, 0.001)
+
+plot <- ggplot() +
+        geom_line(aes(x=x_axis, y = posterior(x_axis))) +
+        geom_vline(aes(xintercept=mean), linetype='dashed', color='green')+
+        geom_vline(aes(xintercept=mode), linetype='dashed', color='black') +
+        xlim(0, 0.5) +
+        theme_bw() +
+        labs(title = TeX('Posterior of $p$'), color='Legend', x='Probability values',
+             y='Posterior pdf') +
+        theme(plot.title = element_text(hjust = 0.5)) +
+        annotate('text', x=mode-0.05, y=16 , label=sprintf("Mode = %s", round(mode, 3)), size=3) +
+        annotate('text', x=mode+0.05, y=16 , label=sprintf("Mean = %s", round(mean, 3)), size=3) +
+        geom_ribbon(aes(x = axis_ribbon, ymin=0, ymax=posterior(axis_ribbon)), fill='blue', alpha=0.3) +
+        geom_vline(aes(xintercept = lower_bound, color='Bounds of the \ncredible interval')
+                   , linetype = 'dashed') +
+        geom_vline(aes(xintercept = upper_bound)
+                   , linetype = 'dashed', color='magenta') +
+        scale_color_manual(values = c('Bounds of the \ncredible interval'='magenta')) 
+        
+
+plot
+```
+```{r}
+cat(paste('We choose the mode as the estimator, \nits value, computed analitically, is:', round(mode, 3)))
+cat(paste('\n\nThe mean computed analitically is:', round(mean, 3)))
+cat(paste('\nThe bounds of the credible interval are:', 
+          round(lower_bound, 4), '-', round(upper_bound, 4)))
+variance <- (alpha_post*beta_post)/((alpha_post +beta_post)^2*(alpha+beta+1))
+
+cat(paste('\nThe variance computed analitically is:', round(variance, 4)))
+
+```
+
+## Point 4
+
+We begin with the frequentist approach
+
+```{r}
+y_vector <- 0:25
+p_null <- 0.1
+
+plot <- ggplot() +
+        geom_col(aes(x=y_vector, y=dbinom(y_vector, prob = p_null, size = n)), 
+                 fill='blue', alpha=0.5, color='black') +
+        geom_col(aes(x=11, y=dbinom(11, prob = p_null, size = n)), 
+                 fill='firebrick', alpha=0.5, color='black') +
+        labs(title = 'Frequentist hypothesis testing', x = 'y values', y = 'Posterior values')+
+        geom_hline(aes(yintercept=0.05), linetype='dashed', color='magenta') +      
+        annotate('text', x=1, y=0.055 , label=sprintf("alpha = %s", 0.05), size=3) +
+        theme_bw()  +
+        scale_x_discrete(limits = 0:25, labels= 0:25)
+  
+plot
+
+
+```
+### 
+
+```{r}
+cat(paste('We see that $y=11$ is in the acceptance region, \nthen we do not reject the null hypothesis, infact the value at y = 11 is:', round(dbinom(11, prob = p_null, size = n),3), '> 0.05'))
+```
+
+We look now if we keep the null hypothesis also with the p-value
+```{r}
+p_value <- round(pbinom(11, size= n, prob = p_null)+1-pbinom(n-11-1, n, p_null), 4)
+
+cat(paste('The p-value is:', p_value, '> 0.05'))
+```
+
+So we keep the null hypothesis also with Fischer's method
+
+### Bayesian approach
+```{r}
+cat(paste('We\'ve already computed the posterior previously, we obtained the
+following credible interval: ', lower_bound, '-', upper_bound))
+
+cat('\n0.1 is inside the credible interval then we do not reject the null hypothesis')
+```
+
+```{r}
+# Visual representation of the previous result
+
+plot <- ggplot() +
+        geom_line(aes(x=x_axis, y = posterior(x_axis))) +
+        xlim(0, 0.5) +
+        theme_bw() +
+        geom_vline(aes(xintercept = 0.1), color='green', linetype = 'dashed') +
+        labs(title = TeX('Bayesian hypothesis testing'), color='Legend', x='Probability values',
+             y='Posterior pdf') +
+        theme(plot.title = element_text(hjust = 0.5)) +
+        annotate('text', x=mode+0.04, y=16 , label=sprintf("p = %s", 0.1, size=2)) +
+        geom_ribbon(aes(x = axis_ribbon, ymin=0, ymax=posterior(axis_ribbon)), fill='blue', alpha=0.3) +
+        geom_vline(aes(xintercept = lower_bound, color='Bounds of the \ncredible interval')
+                   , linetype = 'dashed') +
+        geom_vline(aes(xintercept = upper_bound)
+                   , linetype = 'dashed', color='magenta') +
+        scale_color_manual(values = c('Bounds of the \ncredible interval'='magenta')) 
+        
+
+plot
+
+```
+
+## Point 5
+
+```{r}
+y <- 9
+n <- 165
+
+cat(paste('The frequentist estimator for p is y/n = ', round(y/n, 3)))
+```
+
+## Point 6
+In this point we exploit the fact the with a beta prior the posterior is still a
+beta with $\alpha'=\alpha + y$ and $\beta' = n - y + \beta$
+### First prior
+```{r}
+y <- 9
+n <- 165
+alpha_post <- y + 1
+beta_post <- n - y + 10
+# with beta(1, 10) as the prior
+posterior <- function(x){dbeta(x, shape1 = alpha_post, shape2 = beta_post)}
+```
+
+
+```{r}
+x_axis <- seq(0, 1, 0.001)
+cumulative <- pbeta(x_axis,  shape1 = alpha_post, shape2 = beta_post)
+lower_bound <- x_axis[length(cumulative[cumulative <=0.025])]
+upper_bound <- x_axis[length(cumulative[cumulative <=0.975])]
+mean <- alpha_post/(beta_post + alpha_post)
+mode <- (alpha_post - 1)/(beta_post + alpha_post-2)
+axis_ribbon <- seq(lower_bound, upper_bound, 0.001)
+
+plot <- ggplot() +
+        geom_line(aes(x=x_axis, y = posterior(x_axis))) +
+        geom_vline(aes(xintercept=mean), linetype='dashed', color='green')+
+        geom_vline(aes(xintercept=mode), linetype='dashed', color='black') +
+        xlim(0, 0.3) +
+        theme_bw() +
+        labs(title = TeX('Posterior of $p$'), color='Legend', x='Probability values',
+             y='Posterior pdf') +
+        theme(plot.title = element_text(hjust = 0.5)) +
+        annotate('text', x=mode-0.03, y=25 , label=sprintf("Mode = %s", round(mode, 3)), size=3) +
+        annotate('text', x=mode+0.03, y=25 , label=sprintf("Mean = %s", round(mean, 3)), size=3) +
+        geom_ribbon(aes(x = axis_ribbon, ymin=0, ymax=posterior(axis_ribbon)), fill='blue', alpha=0.3) +
+        geom_vline(aes(xintercept = lower_bound, color='Bounds of the \ncredible interval')
+                   , linetype = 'dashed') +
+        geom_vline(aes(xintercept = upper_bound)
+                   , linetype = 'dashed', color='magenta') +
+        scale_color_manual(values = c('Bounds of the \ncredible interval'='magenta')) 
+        
+
+plot
+```
+
+```{r}
+cat(paste('We choose the mode as the estimator, \nits value, computed analitically, is:', round(mode, 3)))
+cat(paste('\n\nThe mean computed analitically is:', round(mean, 3)))
+cat(paste('\nThe bounds of the credible interval are:', 
+          round(lower_bound, 4), '-', round(upper_bound, 4)))
+variance <- (alpha_post*beta_post)/((alpha_post +beta_post)^2*(alpha+beta+1))
+
+cat(paste('\nThe variance computed analitically is:', round(variance, 3)))
+```
+
+## Second prior
+```{r}
+alpha_prior <- 12
+beta_prior <- 115
+alpha_post <-  y + alpha_prior
+beta_post <- n - y + beta_prior
+
+# with previous posterior as the prior
+posterior <- function(x){dbeta(x, shape1 = alpha_post, shape2 = beta_post)}
+```
+
+
+```{r}
+cumulative <- pbeta(x_axis,  shape1 = alpha_post, shape2 = beta_post)
+lower_bound <- x_axis[length(cumulative[cumulative <=0.025])]
+upper_bound <- x_axis[length(cumulative[cumulative <=0.975])]
+mean <- alpha_post/(beta_post + alpha_post)
+mode <- (alpha_post - 1)/(beta_post + alpha_post-2)
+axis_ribbon <- seq(lower_bound, upper_bound, 0.001)
+
+plot <- ggplot() +
+        geom_line(aes(x=x_axis, y = posterior(x_axis))) +
+        geom_vline(aes(xintercept=mean), linetype='dashed', color='green')+
+        geom_vline(aes(xintercept=mode), linetype='dashed', color='black') +
+        xlim(0, 0.3) +
+        theme_bw() +
+        labs(title = TeX('Posterior of $p$'), color='Legend', x='Probability values',
+             y='Posterior pdf') +
+        theme(plot.title = element_text(hjust = 0.5)) +
+        annotate('text', x=mode-0.03, y=27 , label=sprintf("Mode = %s", round(mode, 3)), size=3) +
+        annotate('text', x=mode+0.03, y=27 , label=sprintf("Mean = %s", round(mean, 3)), size=3) +
+        geom_ribbon(aes(x = axis_ribbon, ymin=0, ymax=posterior(axis_ribbon)), fill='blue', alpha=0.3) +
+        geom_vline(aes(xintercept = lower_bound, color='Bounds of the \ncredible interval')
+                   , linetype = 'dashed') +
+        geom_vline(aes(xintercept = upper_bound)
+                   , linetype = 'dashed', color='magenta') +
+        scale_color_manual(values = c('Bounds of the \ncredible interval'='magenta')) 
+        
+
+plot
+
+```
+```{r}
+cat(paste('We choose the mode as the estimator, \nits value, computed analitically, is:', round(mode, 3)))
+cat(paste('\n\nThe mean computed analitically is:', round(mean, 3)))
+cat(paste('\nThe bounds of the credible interval are:', 
+          round(lower_bound, 4), '-', round(upper_bound, 4)))
+variance <- (alpha_post*beta_post)/((alpha_post +beta_post)^2*(alpha+beta+1))
+
+cat(paste('\nThe variance computed analitically is:', round(variance, 4)))
+```
+## Point 8
+### Frequentist approach
+
+```{r}
+y_vector <- 0:30
+p_null <- 0.1
+
+plot <- ggplot() +
+        geom_col(aes(x=y_vector, y=dbinom(y_vector, prob = p_null, size = n)), 
+                 fill='blue', alpha=0.5, color='black') +
+        geom_col(aes(x=9, y=dbinom(9, prob = p_null, size = n)), 
+                 fill='firebrick', alpha=0.5, color='black') +
+        labs(title = 'Frequentist hypothesis testing', x = 'y values', y = 'Posterior values')+
+        geom_hline(aes(yintercept=0.05), linetype='dashed', color='magenta') +      
+        annotate('text', x=1, y=0.055 , label=sprintf("alpha = %s", 0.05), size=3) +
+        theme_bw()  +
+        scale_x_discrete(limits = 0:30, labels= 0:30)
+  
+plot
+```
+
+```{r}
+cat(paste('We have that y = 9 lies in the acceptance region: ',
+          round(dbinom(9, prob = p_null, size = n),3), '<', 0.05))
+```
+
+We thus have that we can reject the null hypothesis
+
+```{r}
+# With Fischer's method
+
+p_value <- round(pbinom(9, size= n, prob = p_null)+1-pbinom(n-9-1, n, p_null), 3)
+
+cat(paste('The p-value is:', p_value, '< 0.05'))
+```
+
+So using Fischer's method leads us to the same outcome
+
+### Bayesian hypothesis testing
+
+**Looking back at the credible intervals previously computed we can see that using the posterior of the first experiment as the prior we obtained the credibility interval 0.045-0.104 so we cannot reject the null hypothesis**
+
+**Using the beta(1, 10) as the prior we obtained as the credibility interval 0.027 - 0.095 so in this case we can reject the null hypothesis**
+
+
+# Exercise 4
+
+```{r}
+sucesses <- 6
+n <- 75
+data_obs <- rep(c(1, 0), c(sucesses, n-sucesses))
+
+data <- NULL
+data$X <- data_obs
+data$n <- length(data_obs)
+```
+
+
+```{r}
+model <- 'ex_1.bug'
+jm <- jags.model(model, data)
+update(jm, 1000)
+chain <- coda.samples(jm, c("p"), n.iter=10000)
+print(summary(chain))
+```
+```{r}
+plot(chain, col="navy")
+```
+
+```{r}
+chain.df <- as.data.frame( as.mcmc(chain) )
+head(chain.df)
+```
+```{r}
+plot <- ggplot()
+```
+
